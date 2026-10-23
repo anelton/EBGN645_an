@@ -1,0 +1,570 @@
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+   1  set i "parcels" /A, B, C/ ;
+   2  set t "years"   /1*2/ ;
+   3   
+   4  alias (i, j) ;
+   5  alias (t, tt) ;
+   6   
+   7  parameter
+   8  wfp(i) "annual prob. a wildfire starts in parcel i"  /A 0.25,   B 0.18,   C 0.15/,
+   9  wfd(i) "damage if wildfire affects parcel i"         /A 400000, B 475000, C 600000/,
+  10  wfr(i) "reduction in prob. after treatment"          /A 0.90,   B 0.92,   C 0.88/,
+  11  c(i)   "cost of treating parcel i"                   /A 25000,  B 40000,  C 35000/,
+  12  trd(i) "damage from prescribed burning"              /A 2000,   B 4000,   C 2000/,
+  13  mb(t)  "max treatments per year"                     /1 1, 2 1/ ;
+  14   
+  15  scalar tb "treatment budget across both years" /75000/ ;
+  16   
+  17  * wfs(j,i): prob. a fire starting in j spreads directly to i (before treatment)
+  18  table wfs(j,i)
+  19          A       B       C
+  20  A               0.45    0.30
+  21  B       0.40            0.35
+  22  C       0.35    0.35          ;
+  23   
+  24  * total prob. parcel i is affected: own ignition + fire spreading in from j
+  25  parameter pa(i) "total prob. parcel i is affected by wildfire" ;
+  26  pa(i) = wfp(i) + sum(j$wfs(j,i), wfp(j) * wfs(j,i)) ;
+  27   
+  28  binary variable X(i,t) "1 if parcel i is treated in year t" ;
+  29  positive variable Y(i,t) "1 if parcel i treated in current or prior year" ;
+  30  variable TC "total costs" ;
+  31   
+  32  equation objfn, budget, maxtreat(t), once(i), track(i,t) ;
+  33   
+  34  objfn.. TC =e=
+  35      sum((i,t), pa(i) * (1 - wfr(i) * Y(i,t)) * wfd(i))
+  36    + sum((i,t), (c(i) + trd(i)) * X(i,t)) ;
+  37   
+  38  budget..      tb =g= sum((i,t), c(i) * X(i,t)) ;
+  39  maxtreat(t).. mb(t) =g= sum(i, X(i,t)) ;
+  40  once(i)..     sum(t, X(i,t)) =l= 1 ;
+  41  track(i,t)..  Y(i,t) =e= sum(tt$(ord(tt) <= ord(t)), X(i,tt)) ;
+  42   
+  43  model wildfire /all/ ;
+  44  option optcr = 0 ;
+  45   
+  46  solve wildfire using MIP minimizing TC ;
+  47  parameter rep ;
+  48  rep("Baseline","X",i,t) = X.l(i,t) ;
+  49  rep("Baseline","Y",i,t) = Y.l(i,t) ;
+  50  rep("Baseline","TC","total","-") = TC.l ;
+  51   
+  52  execute_unload 'alldata_wildfire.gdx' ;
+  53   
+  54   
+  55   
+  56  * example scenario: allow two treatments per year
+  57  mb(t) = 2 ;
+  58   
+  59  solve wildfire using MIP minimizing TC ;
+  60  rep("Double Treatment","X",i,t) = X.l(i,t) ;
+  61  rep("Double Treatment","Y",i,t) = Y.l(i,t) ;
+  62  rep("Double Treatment","TC","total","-") = TC.l ;
+  63   
+  64  display pa, rep ;
+  65   
+  66  execute_unload 'alldata_wildfire.gdx' ;
+
+
+COMPILATION TIME     =        0.000 SECONDS      3 MB  54.3.1 61154be4 WEX-WEI
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 2
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Equation Listing    SOLVE wildfire Using MIP From line 46
+
+
+---- objfn  =E=  
+
+objfn..  - 27000*X(A,1) - 27000*X(A,2) - 44000*X(B,1) - 44000*X(B,2) - 37000*X(C,1) - 37000*X(C,2) + 134820*Y(A,1) + 134820*Y(A,2) + 150765*Y(B,1) + 150765*Y(B,2) + 152064*Y(C,1) + 152064*Y(C,2) + TC =E= 972950 ; (LHS = 0, INFES = 972950 ****)
+     
+
+---- budget  =G=  
+
+budget..  - 25000*X(A,1) - 25000*X(A,2) - 40000*X(B,1) - 40000*X(B,2) - 35000*X(C,1) - 35000*X(C,2) =G= -75000 ; (LHS = 0)
+     
+
+---- maxtreat  =G=  
+
+maxtreat(1)..  - X(A,1) - X(B,1) - X(C,1) =G= -1 ; (LHS = 0)
+     
+maxtreat(2)..  - X(A,2) - X(B,2) - X(C,2) =G= -1 ; (LHS = 0)
+     
+
+---- once  =L=  
+
+once(A)..  X(A,1) + X(A,2) =L= 1 ; (LHS = 0)
+     
+once(B)..  X(B,1) + X(B,2) =L= 1 ; (LHS = 0)
+     
+once(C)..  X(C,1) + X(C,2) =L= 1 ; (LHS = 0)
+     
+
+---- track  =E=  
+
+track(A,1)..  - X(A,1) + Y(A,1) =E= 0 ; (LHS = 0)
+     
+track(A,2)..  - X(A,1) - X(A,2) + Y(A,2) =E= 0 ; (LHS = 0)
+     
+track(B,1)..  - X(B,1) + Y(B,1) =E= 0 ; (LHS = 0)
+     
+REMAINING 3 ENTRIES SKIPPED
+
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 3
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Column Listing      SOLVE wildfire Using MIP From line 46
+
+
+---- X  1 if parcel i is treated in year t
+
+X(A,1)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+   -27000       objfn
+   -25000       budget
+       -1       maxtreat(1)
+        1       once(A)
+       -1       track(A,1)
+       -1       track(A,2)
+
+X(A,2)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+   -27000       objfn
+   -25000       budget
+       -1       maxtreat(2)
+        1       once(A)
+       -1       track(A,2)
+
+X(B,1)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+   -44000       objfn
+   -40000       budget
+       -1       maxtreat(1)
+        1       once(B)
+       -1       track(B,1)
+       -1       track(B,2)
+
+REMAINING 3 ENTRIES SKIPPED
+
+---- Y  1 if parcel i treated in current or prior year
+
+Y(A,1)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+   134820       objfn
+        1       track(A,1)
+
+Y(A,2)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+   134820       objfn
+        1       track(A,2)
+
+Y(B,1)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+   150765       objfn
+        1       track(B,1)
+
+REMAINING 3 ENTRIES SKIPPED
+
+---- TC  total costs
+
+TC
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       objfn
+
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 4
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Range Statistics    SOLVE wildfire Using MIP From line 46
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [ 1.000E+00, 9.730E+05] - Zero values observed as well
+Bound     [min, max] : [ 1.000E+00, 1.000E+00] - Zero values observed as well
+Matrix    [min, max] : [ 1.000E+00, 1.521E+05]
+
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 5
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Model Statistics    SOLVE wildfire Using MIP From line 46
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           5     SINGLE EQUATIONS           13
+BLOCKS OF VARIABLES           3     SINGLE VARIABLES           13
+NON ZERO ELEMENTS            46     DISCRETE VARIABLES          6
+
+
+GENERATION TIME      =        0.079 SECONDS      4 MB  54.3.1 61154be4 WEX-WEI
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 6
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Solution Report     SOLVE wildfire Using MIP From line 46
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   wildfire            OBJECTIVE  TC
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  46
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      1 Optimal
+**** OBJECTIVE VALUE           598002.0000
+
+ RESOURCE USAGE, LIMIT          0.016 10000000000.000
+ ITERATION COUNT, LIMIT         3    2147483647
+--- GAMS/CPLEX Link licensed for continuous and discrete problems.
+--- GMO setup time: 0.00s
+--- GMO memory 0.50 Mb (peak 0.50 Mb)
+--- Dictionary memory 0.00 Mb
+--- Cplex 22.1.2.0 link memory 0.00 Mb (peak 0.00 Mb)
+--- Starting Cplex
+
+
+--- MIP status (101): integer optimal solution.
+--- Cplex Time: 0.02sec (det. 0.05 ticks)
+
+
+Proven optimal solution
+MIP Solution:       598002.000000    (3 iterations, 0 nodes)
+
+Best possible:      598002.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+                           LOWER          LEVEL          UPPER
+
+---- EQU objfn         972950.0000    972950.0000    972950.0000      
+---- EQU budget        -75000.0000    -60000.0000        +INF         
+
+---- EQU maxtreat  
+
+         LOWER          LEVEL          UPPER
+
+1        -1.0000        -1.0000        +INF         
+2        -1.0000        -1.0000        +INF         
+
+---- EQU once  
+
+         LOWER          LEVEL          UPPER
+
+A        -INF            1.0000         1.0000      
+B        -INF             .             1.0000      
+C        -INF            1.0000         1.0000      
+
+---- EQU track  
+
+           LOWER          LEVEL          UPPER
+
+A.1          .              .              .          
+A.2          .              .              .          
+B.1          .              .              .          
+B.2          .              .              .          
+C.1          .              .              .          
+C.2          .              .              .          
+
+---- VAR X  1 if parcel i is treated in year t
+
+           LOWER          LEVEL          UPPER
+
+A.1          .              .             1.0000      
+A.2          .             1.0000         1.0000      
+B.1          .              .             1.0000      
+B.2          .              .             1.0000      
+C.1          .             1.0000         1.0000      
+C.2          .              .             1.0000      
+
+---- VAR Y  1 if parcel i treated in current or prior year
+
+           LOWER          LEVEL          UPPER
+
+A.1          .              .            +INF         
+A.2          .             1.0000        +INF         
+B.1          .              .            +INF         
+B.2          .              .            +INF         
+C.1          .             1.0000        +INF         
+C.2          .             1.0000        +INF         
+
+                           LOWER          LEVEL          UPPER
+
+---- VAR TC                -INF       598002.0000        +INF         
+
+  TC  total costs
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 7
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Equation Listing    SOLVE wildfire Using MIP From line 59
+
+
+---- objfn  =E=  
+
+objfn..  - 27000*X(A,1) - 27000*X(A,2) - 44000*X(B,1) - 44000*X(B,2) - 37000*X(C,1) - 37000*X(C,2) + 134820*Y(A,1) + 134820*Y(A,2) + 150765*Y(B,1) + 150765*Y(B,2) + 152064*Y(C,1) + 152064*Y(C,2) + TC =E= 972950 ; (LHS = 972950)
+     
+
+---- budget  =G=  
+
+budget..  - 25000*X(A,1) - 25000*X(A,2) - 40000*X(B,1) - 40000*X(B,2) - 35000*X(C,1) - 35000*X(C,2) =G= -75000 ; (LHS = -60000)
+     
+
+---- maxtreat  =G=  
+
+maxtreat(1)..  - X(A,1) - X(B,1) - X(C,1) =G= -2 ; (LHS = -1)
+     
+maxtreat(2)..  - X(A,2) - X(B,2) - X(C,2) =G= -2 ; (LHS = -1)
+     
+
+---- once  =L=  
+
+once(A)..  X(A,1) + X(A,2) =L= 1 ; (LHS = 1)
+     
+once(B)..  X(B,1) + X(B,2) =L= 1 ; (LHS = 0)
+     
+once(C)..  X(C,1) + X(C,2) =L= 1 ; (LHS = 1)
+     
+
+---- track  =E=  
+
+track(A,1)..  - X(A,1) + Y(A,1) =E= 0 ; (LHS = 0)
+     
+track(A,2)..  - X(A,1) - X(A,2) + Y(A,2) =E= 0 ; (LHS = 0)
+     
+track(B,1)..  - X(B,1) + Y(B,1) =E= 0 ; (LHS = 0)
+     
+REMAINING 3 ENTRIES SKIPPED
+
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 8
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Column Listing      SOLVE wildfire Using MIP From line 59
+
+
+---- X  1 if parcel i is treated in year t
+
+X(A,1)
+                (.LO, .L, .UP, .M = 0, 0, 1, NA)
+   -27000       objfn
+   -25000       budget
+       -1       maxtreat(1)
+        1       once(A)
+       -1       track(A,1)
+       -1       track(A,2)
+
+X(A,2)
+                (.LO, .L, .UP, .M = 0, 1, 1, NA)
+   -27000       objfn
+   -25000       budget
+       -1       maxtreat(2)
+        1       once(A)
+       -1       track(A,2)
+
+X(B,1)
+                (.LO, .L, .UP, .M = 0, 0, 1, NA)
+   -44000       objfn
+   -40000       budget
+       -1       maxtreat(1)
+        1       once(B)
+       -1       track(B,1)
+       -1       track(B,2)
+
+REMAINING 3 ENTRIES SKIPPED
+
+---- Y  1 if parcel i treated in current or prior year
+
+Y(A,1)
+                (.LO, .L, .UP, .M = 0, 0, +INF, NA)
+   134820       objfn
+        1       track(A,1)
+
+Y(A,2)
+                (.LO, .L, .UP, .M = 0, 1, +INF, NA)
+   134820       objfn
+        1       track(A,2)
+
+Y(B,1)
+                (.LO, .L, .UP, .M = 0, 0, +INF, NA)
+   150765       objfn
+        1       track(B,1)
+
+REMAINING 3 ENTRIES SKIPPED
+
+---- TC  total costs
+
+TC
+                (.LO, .L, .UP, .M = -INF, 598002, +INF, NA)
+        1       objfn
+
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 9
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Range Statistics    SOLVE wildfire Using MIP From line 59
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [ 1.000E+00, 9.730E+05] - Zero values observed as well
+Bound     [min, max] : [ 1.000E+00, 1.000E+00] - Zero values observed as well
+Matrix    [min, max] : [ 1.000E+00, 1.521E+05]
+
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 10
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Model Statistics    SOLVE wildfire Using MIP From line 59
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           5     SINGLE EQUATIONS           13
+BLOCKS OF VARIABLES           3     SINGLE VARIABLES           13
+NON ZERO ELEMENTS            46     DISCRETE VARIABLES          6
+
+
+GENERATION TIME      =        0.015 SECONDS      4 MB  54.3.1 61154be4 WEX-WEI
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 11
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Solution Report     SOLVE wildfire Using MIP From line 59
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   wildfire            OBJECTIVE  TC
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  59
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      1 Optimal
+**** OBJECTIVE VALUE           448292.0000
+
+ RESOURCE USAGE, LIMIT          0.000 10000000000.000
+ ITERATION COUNT, LIMIT         0    2147483647
+--- GAMS/CPLEX Link licensed for continuous and discrete problems.
+--- GMO setup time: 0.00s
+--- GMO memory 0.50 Mb (peak 0.50 Mb)
+--- Dictionary memory 0.00 Mb
+--- Cplex 22.1.2.0 link memory 0.00 Mb (peak 0.00 Mb)
+--- Starting Cplex
+
+
+--- MIP status (101): integer optimal solution.
+--- Cplex Time: 0.00sec (det. 0.02 ticks)
+
+
+Proven optimal solution
+MIP Solution:       448292.000000    (0 iterations, 0 nodes)
+
+Best possible:      448292.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+                           LOWER          LEVEL          UPPER
+
+---- EQU objfn         972950.0000    972950.0000    972950.0000      
+---- EQU budget        -75000.0000    -75000.0000        +INF         
+
+---- EQU maxtreat  
+
+         LOWER          LEVEL          UPPER
+
+1        -2.0000        -2.0000        +INF         
+2        -2.0000          .            +INF         
+
+---- EQU once  
+
+         LOWER          LEVEL          UPPER
+
+A        -INF             .             1.0000      
+B        -INF            1.0000         1.0000      
+C        -INF            1.0000         1.0000      
+
+---- EQU track  
+
+           LOWER          LEVEL          UPPER
+
+A.1          .              .              .          
+A.2          .              .              .          
+B.1          .              .              .          
+B.2          .              .              .          
+C.1          .              .              .          
+C.2          .              .              .          
+
+---- VAR X  1 if parcel i is treated in year t
+
+           LOWER          LEVEL          UPPER
+
+A.1          .              .             1.0000      
+A.2          .              .             1.0000      
+B.1          .             1.0000         1.0000      
+B.2          .              .             1.0000      
+C.1          .             1.0000         1.0000      
+C.2          .              .             1.0000      
+
+---- VAR Y  1 if parcel i treated in current or prior year
+
+           LOWER          LEVEL          UPPER
+
+A.1          .              .            +INF         
+A.2          .              .            +INF         
+B.1          .             1.0000        +INF         
+B.2          .             1.0000        +INF         
+C.1          .             1.0000        +INF         
+C.2          .             1.0000        +INF         
+
+                           LOWER          LEVEL          UPPER
+
+---- VAR TC                -INF       448292.0000        +INF         
+
+  TC  total costs
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 54.3.1  61154be4 Aug 21, 2026          WEX-WEI x86 64bit/MS Windows - 10/23/26 17:53:34 Page 12
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+E x e c u t i o n
+
+
+----     64 PARAMETER pa  total prob. parcel i is affected by wildfire
+
+A 0.374,    B 0.345,    C 0.288
+
+
+----     64 PARAMETER rep  
+
+INDEX 1 = Baseline
+
+                   1           2           -
+
+X .A                       1.000
+X .C           1.000
+Y .A                       1.000
+Y .C           1.000       1.000
+TC.total                          598002.000
+
+INDEX 1 = Double Treatment
+
+                   1           2           -
+
+X .B           1.000
+X .C           1.000
+Y .B           1.000       1.000
+Y .C           1.000       1.000
+TC.total                          448292.000
+
+
+
+EXECUTION TIME       =        0.407 SECONDS      4 MB  54.3.1 61154be4 WEX-WEI
+
+
+USER: Course License                                 G260809+0003Ac-GEN
+      Colorado School of Mines                                  DCE5587
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      C:\Users\kingo\Documents\GitHub\EBGN645_an\Milestone2_v2.gms
+Output     C:\Users\kingo\Documents\GitHub\EBGN645_an\Milestone2_v2.lst
